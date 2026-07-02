@@ -1,2 +1,0 @@
-# RnE-Drone-Software-App
-.
