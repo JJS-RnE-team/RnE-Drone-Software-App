@@ -1,0 +1,5 @@
+flask
+djitellopy
+ultralytics
+opencv-python
+numpy

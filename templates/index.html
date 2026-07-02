@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tello 농구 촬영 드론</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="max-w-4xl mx-auto p-4 flex flex-col gap-4">
+        <h1 class="text-2xl font-bold text-center">Tello 농구 촬영 드론</h1>
+
+        <!-- 상태 표시 -->
+        <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="bg-gray-800 rounded-lg p-3">
+                <div class="text-xs text-gray-400">연결 상태</div>
+                <div id="status-connected" class="text-lg font-semibold">확인 중…</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-3">
+                <div class="text-xs text-gray-400">배터리</div>
+                <div id="status-battery" class="text-lg font-semibold">-</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-3">
+                <div class="text-xs text-gray-400">추적 대상</div>
+                <div id="status-target" class="text-lg font-semibold">-</div>
+            </div>
+        </div>
+
+        <!-- 영상 (가운데 크게) -->
+        <div class="flex justify-center">
+            <img id="video" src="/video_feed" alt="drone stream"
+                 class="w-full max-w-3xl rounded-lg border border-gray-700 bg-black">
+        </div>
+
+        <!-- 버튼 -->
+        <div class="flex flex-wrap justify-center gap-3">
+            <button id="btn-takeoff"
+                    class="px-6 py-3 rounded-lg bg-green-600 hover:bg-green-500 font-semibold">
+                이륙
+            </button>
+            <button id="btn-land"
+                    class="px-6 py-3 rounded-lg bg-red-600 hover:bg-red-500 font-semibold">
+                착륙
+            </button>
+            <button id="btn-download"
+                    class="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed">
+                mp4 다운로드
+            </button>
+        </div>
+
+        <div id="msg" class="text-center text-sm text-gray-400 h-5"></div>
+    </div>
+
+    <script>
+        const msg = document.getElementById("msg");
+
+        function showMsg(text) {
+            msg.textContent = text;
+            setTimeout(() => { if (msg.textContent === text) msg.textContent = ""; }, 3000);
+        }
+
+        async function post(url) {
+            try {
+                const res = await fetch(url, { method: "POST" });
+                const data = await res.json();
+                if (!data.ok) showMsg(data.error || "요청 실패");
+            } catch (e) {
+                showMsg("요청 실패: " + e);
+            }
+        }
+
+        document.getElementById("btn-takeoff").addEventListener("click", () => {
+            post("/api/takeoff"); showMsg("이륙 명령 전송");
+        });
+        document.getElementById("btn-land").addEventListener("click", () => {
+            post("/api/land"); showMsg("착륙 명령 전송");
+        });
+        document.getElementById("btn-download").addEventListener("click", () => {
+            window.location.href = "/api/download";
+        });
+
+        // 상태 폴링 (1초마다)
+        async function refreshStatus() {
+            try {
+                const res = await fetch("/api/status");
+                const s = await res.json();
+
+                const connEl = document.getElementById("status-connected");
+                if (s.connected) {
+                    connEl.textContent = s.flying ? "비행 중" : "연결됨";
+                    connEl.className = "text-lg font-semibold text-green-400";
+                } else {
+                    connEl.textContent = "연결 안 됨";
+                    connEl.className = "text-lg font-semibold text-red-400";
+                }
+
+                document.getElementById("status-battery").textContent =
+                    (s.battery !== null && s.battery !== undefined) ? s.battery + "%" : "-";
+                document.getElementById("status-target").textContent = s.target || "-";
+
+                // 녹화 중이 아니고 저장된 파일이 있으면 다운로드 활성화
+                const dlBtn = document.getElementById("btn-download");
+                dlBtn.disabled = !(s.last_recording && !s.recording);
+            } catch (e) {
+                const connEl = document.getElementById("status-connected");
+                connEl.textContent = "서버 응답 없음";
+                connEl.className = "text-lg font-semibold text-red-400";
+            }
+        }
+
+        setInterval(refreshStatus, 1000);
+        refreshStatus();
+    </script>
+</body>
+</html>
