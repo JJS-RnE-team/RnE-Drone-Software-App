@@ -132,10 +132,12 @@ def draw_minimap(frame, line1_m, line3_m, line2_m):
 # 내부 버퍼에 저장하고 외부(Flask)가 get_latest_frame()으로 읽어간다.
 #
 # 웹 UI 연동을 위해 다음이 추가되었다 (알고리즘 자체는 불변, 제어 흐름/상태 노출만 추가):
-#   - 명령 큐: takeoff() / land() 를 Flask 요청 스레드에서 호출하면 루프 스레드가 실행한다.
+#   - 명령 큐: takeoff() / land() / start_recording() / stop_recording() 를 Flask 요청
+#     스레드에서 호출하면 루프 스레드가 실행한다.
 #     (djitellopy Tello 명령을 한 스레드로 일원화해 충돌 방지)
 #   - 자동 이륙 제거: start()는 연결/스트림/분석 루프만 돌리고, 이륙은 takeoff() 명령으로 수행.
-#   - 녹화: 이륙 시 annotated 프레임을 mp4로 녹화 시작, 착륙 시 파일을 마무리한다.
+#   - 녹화 분리: 이착륙과 별개로 start_recording()/stop_recording() 명령으로 mp4 녹화를
+#     시작/중지한다. 녹화는 비행 중일 때만 시작할 수 있고, 착륙하면 자동으로 마무리된다.
 #   - 상태 노출: get_status() 로 배터리/연결/비행/녹화/현재 타겟을 제공한다.
 class DroneController:
     def __init__(self):
@@ -195,6 +197,13 @@ class DroneController:
     def land(self):
         self._command_queue.put("land")
 
+    def start_recording(self):
+        # 비행 중일 때만 실제로 시작된다(루프 스레드에서 _flying 확인).
+        self._command_queue.put("start_record")
+
+    def stop_recording(self):
+        self._command_queue.put("stop_record")
+
     # --- 상태 조회 ---
     def get_status(self):
         with self._status_lock:
@@ -248,14 +257,8 @@ class DroneController:
                                 tello.takeoff()
                                 time.sleep(1)
                                 tello.move_up(250)
-                                # 녹화 시작: 실제 writer는 첫 프레임에서 크기를 알고 나서 연다
-                                os.makedirs(RECORDINGS_DIR, exist_ok=True)
-                                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                record_path = os.path.join(RECORDINGS_DIR, f"flight_{stamp}.mp4")
-                                video_writer = None
                                 with self._status_lock:
                                     self._flying = True
-                                    self._recording = True
                         elif cmd == "land":
                             if self._flying:
                                 try:
@@ -263,12 +266,32 @@ class DroneController:
                                     tello.land()
                                 except:
                                     pass
-                                # 녹화 마무리
+                                # 착륙 시 녹화 중이면 자동으로 마무리 (지상에서는 녹화하지 않음)
                                 if video_writer is not None:
                                     video_writer.release()
                                     video_writer = None
                                 with self._status_lock:
                                     self._flying = False
+                                    if self._recording:
+                                        self._recording = False
+                                        if record_path is not None:
+                                            self._last_recording_path = record_path
+                        elif cmd == "start_record":
+                            # 이착륙과 분리된 녹화 시작 (비행 중일 때만)
+                            if self._flying and not self._recording:
+                                os.makedirs(RECORDINGS_DIR, exist_ok=True)
+                                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                record_path = os.path.join(RECORDINGS_DIR, f"flight_{stamp}.mp4")
+                                # 실제 writer는 첫 프레임에서 크기를 알고 나서 연다
+                                video_writer = None
+                                with self._status_lock:
+                                    self._recording = True
+                        elif cmd == "stop_record":
+                            if self._recording:
+                                if video_writer is not None:
+                                    video_writer.release()
+                                    video_writer = None
+                                with self._status_lock:
                                     self._recording = False
                                     if record_path is not None:
                                         self._last_recording_path = record_path
@@ -455,8 +478,8 @@ class DroneController:
 # --- 단독 실행 ---
 # 백그라운드 컨트롤러를 띄우고, 옵션(show_preview)에 따라 기존처럼 로컬 창으로 미리보기를
 # 표시한다. Flask 등으로 감쌀 때는 이 블록 대신 app.py에서 DroneController를 사용한다.
-# 이륙/착륙은 이제 명령으로 수행되므로, 단독 실행 시에는 키보드로 트리거한다:
-#   t = 이륙, l = 착륙, q = 종료
+# 이륙/착륙/녹화는 이제 명령으로 수행되므로, 단독 실행 시에는 키보드로 트리거한다:
+#   t = 이륙, l = 착륙, r = 촬영 시작, s = 촬영 중지, q = 종료
 def main(show_preview=True):
     controller = DroneController()
     controller.start()
@@ -473,6 +496,10 @@ def main(show_preview=True):
                     controller.takeoff()
                 elif key == ord('l'):
                     controller.land()
+                elif key == ord('r'):
+                    controller.start_recording()
+                elif key == ord('s'):
+                    controller.stop_recording()
         else:
             while controller.is_running():
                 time.sleep(0.1)

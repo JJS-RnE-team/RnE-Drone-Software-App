@@ -3,18 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tello 농구 촬영 드론</title>
+    <title>Tello 촬영 드론</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes rec-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .rec-blink { animation: rec-blink 1s infinite; }
+    </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
     <div class="max-w-4xl mx-auto p-4 flex flex-col gap-4">
-        <h1 class="text-2xl font-bold text-center">Tello 농구 촬영 드론</h1>
+        <h1 class="text-2xl font-bold text-center">Tello 촬영 드론</h1>
 
         <!-- 상태 표시 -->
-        <div class="grid grid-cols-3 gap-3 text-center">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
             <div class="bg-gray-800 rounded-lg p-3">
                 <div class="text-xs text-gray-400">연결 상태</div>
                 <div id="status-connected" class="text-lg font-semibold">확인 중…</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-3">
+                <div class="text-xs text-gray-400">비행 상태</div>
+                <div id="status-flying" class="text-lg font-semibold">-</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-3">
+                <div class="text-xs text-gray-400">촬영 상태</div>
+                <div id="status-recording" class="text-lg font-semibold">-</div>
             </div>
             <div class="bg-gray-800 rounded-lg p-3">
                 <div class="text-xs text-gray-400">배터리</div>
@@ -35,12 +47,20 @@
         <!-- 버튼 -->
         <div class="flex flex-wrap justify-center gap-3">
             <button id="btn-takeoff"
-                    class="px-6 py-3 rounded-lg bg-green-600 hover:bg-green-500 font-semibold">
+                    class="px-6 py-3 rounded-lg bg-green-600 hover:bg-green-500 font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed">
                 이륙
             </button>
             <button id="btn-land"
-                    class="px-6 py-3 rounded-lg bg-red-600 hover:bg-red-500 font-semibold">
+                    class="px-6 py-3 rounded-lg bg-red-600 hover:bg-red-500 font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed">
                 착륙
+            </button>
+            <button id="btn-start-rec"
+                    class="px-6 py-3 rounded-lg bg-amber-600 hover:bg-amber-500 font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed">
+                촬영 시작
+            </button>
+            <button id="btn-stop-rec"
+                    class="px-6 py-3 rounded-lg bg-gray-500 hover:bg-gray-400 font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed">
+                촬영 중지
             </button>
             <button id="btn-download"
                     class="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed">
@@ -75,9 +95,21 @@
         document.getElementById("btn-land").addEventListener("click", () => {
             post("/api/land"); showMsg("착륙 명령 전송");
         });
+        document.getElementById("btn-start-rec").addEventListener("click", () => {
+            post("/api/start_recording"); showMsg("촬영 시작");
+        });
+        document.getElementById("btn-stop-rec").addEventListener("click", () => {
+            post("/api/stop_recording"); showMsg("촬영 중지");
+        });
         document.getElementById("btn-download").addEventListener("click", () => {
             window.location.href = "/api/download";
         });
+
+        const btnTakeoff = document.getElementById("btn-takeoff");
+        const btnLand = document.getElementById("btn-land");
+        const btnStartRec = document.getElementById("btn-start-rec");
+        const btnStopRec = document.getElementById("btn-stop-rec");
+        const btnDownload = document.getElementById("btn-download");
 
         // 상태 폴링 (1초마다)
         async function refreshStatus() {
@@ -85,22 +117,50 @@
                 const res = await fetch("/api/status");
                 const s = await res.json();
 
+                // 연결 상태
                 const connEl = document.getElementById("status-connected");
                 if (s.connected) {
-                    connEl.textContent = s.flying ? "비행 중" : "연결됨";
+                    connEl.textContent = "연결됨";
                     connEl.className = "text-lg font-semibold text-green-400";
                 } else {
                     connEl.textContent = "연결 안 됨";
                     connEl.className = "text-lg font-semibold text-red-400";
                 }
 
+                // 비행 상태
+                const flyEl = document.getElementById("status-flying");
+                if (s.flying) {
+                    flyEl.textContent = "비행 중";
+                    flyEl.className = "text-lg font-semibold text-green-400";
+                } else {
+                    flyEl.textContent = "지상";
+                    flyEl.className = "text-lg font-semibold text-gray-400";
+                }
+
+                // 촬영 상태
+                const recEl = document.getElementById("status-recording");
+                if (s.recording) {
+                    recEl.textContent = "● 촬영 중";
+                    recEl.className = "text-lg font-semibold text-red-500 rec-blink";
+                } else {
+                    recEl.textContent = "대기";
+                    recEl.className = "text-lg font-semibold text-gray-400";
+                }
+
+                // 배터리 / 추적 대상
                 document.getElementById("status-battery").textContent =
                     (s.battery !== null && s.battery !== undefined) ? s.battery + "%" : "-";
                 document.getElementById("status-target").textContent = s.target || "-";
 
-                // 녹화 중이 아니고 저장된 파일이 있으면 다운로드 활성화
-                const dlBtn = document.getElementById("btn-download");
-                dlBtn.disabled = !(s.last_recording && !s.recording);
+                // --- 버튼 활성/비활성 ---
+                // 이륙: 지상일 때만 / 착륙: 비행 중일 때만
+                btnTakeoff.disabled = s.flying;
+                btnLand.disabled = !s.flying;
+                // 촬영 시작: 비행 중 + 촬영 중 아님 / 촬영 중지: 촬영 중일 때만
+                btnStartRec.disabled = !(s.flying && !s.recording);
+                btnStopRec.disabled = !s.recording;
+                // 다운로드: 저장된 파일이 있고 촬영 중이 아닐 때
+                btnDownload.disabled = !(s.last_recording && !s.recording);
             } catch (e) {
                 const connEl = document.getElementById("status-connected");
                 connEl.textContent = "서버 응답 없음";

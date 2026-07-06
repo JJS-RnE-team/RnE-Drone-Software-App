@@ -4,7 +4,16 @@ import time
 import cv2
 from flask import Flask, Response, jsonify, render_template, send_file
 
-from drone_flight_algorithm import DroneController
+# ─────────────────────────────────────────────────────────────────────────────
+# [알고리즘 교체 지점] 아래 import 한 줄만 바꾸면 드론 제어 알고리즘이 통째로 교체된다.
+# 두 모듈의 DroneController 는 공개 인터페이스가 동일하므로 나머지 코드는 그대로 동작한다.
+#
+#   from drone_flight_test import DroneController        # ← 테스트용 (사람 추적, 지금 사용 중)
+#   from drone_flight_algorithm import DroneController   # ← 실제 (농구 촬영 회전 제어)
+#
+# 최종 exe 검증이 끝나면 위 두 줄의 주석을 서로 바꿔주면 된다.
+# ─────────────────────────────────────────────────────────────────────────────
+from drone_flight_test import DroneController
 
 app = Flask(__name__)
 
@@ -54,6 +63,18 @@ def api_takeoff():
 @app.route("/api/land", methods=["POST"])
 def api_land():
     controller.land()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/start_recording", methods=["POST"])
+def api_start_recording():
+    controller.start_recording()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/stop_recording", methods=["POST"])
+def api_stop_recording():
+    controller.stop_recording()
     return jsonify({"ok": True})
 
 
