@@ -36,11 +36,12 @@ def app_dir():
 def model_path(name):
     """AI 모델(.pt) 파일 경로를 돌려준다.
 
-    - models/ 폴더(개발 시) 또는 exe에 번들된 models/ 안에 파일이 있으면 그 경로를 쓴다.
+    - 프로젝트 루트(개발 시) 또는 exe에 번들된 위치에 파일이 있으면 그 경로를 쓴다.
+      (best.pt, yolov8n-pose-test4.pt 는 레포 루트에 함께 올라와 있다.)
     - 없으면 이름만 그대로 돌려줘서 ultralytics가 인터넷에서 자동 다운로드하도록 둔다
       (yolov8n.pt, yolo11n.pt 같은 공개 모델용).
     """
-    bundled = resource_path(os.path.join("models", name))
+    bundled = resource_path(name)
     if os.path.exists(bundled):
         return bundled
     return name

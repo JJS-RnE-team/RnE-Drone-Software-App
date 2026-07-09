@@ -12,9 +12,9 @@ import glob
 from PyInstaller.utils.hooks import collect_all
 
 # --- exe 안에 함께 넣을 파일들 ------------------------------------------------
-# models/ 폴더의 모든 .pt 모델을 exe 안 models/ 위치에 그대로 넣는다.
-# (best.pt, yolov8n-pose-test4.pt, yolo11n.pt, yolov8n.pt 등 넣어둔 건 전부 포함)
-model_datas = [(p, "models") for p in glob.glob("models/*.pt")]
+# 프로젝트 루트의 모든 .pt 모델을 exe 안 루트에 그대로 넣는다.
+# (best.pt, yolov8n-pose-test4.pt 등 루트에 있는 .pt 는 전부 포함)
+model_datas = [(p, ".") for p in glob.glob("*.pt")]
 
 # HTML/정적 템플릿도 templates/ 위치에 넣는다.
 template_datas = [(p, "templates") for p in glob.glob("templates/*")]
