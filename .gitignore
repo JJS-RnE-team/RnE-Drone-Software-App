@@ -1,3 +1,8 @@
 __pycache__/
 *.pyc
 recordings/
+
+# PyInstaller 빌드 결과물 (각자 윈도우에서 빌드하므로 git에는 올리지 않는다)
+build/
+dist/
+*.exe

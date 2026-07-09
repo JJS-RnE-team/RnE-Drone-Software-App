@@ -1,8 +1,12 @@
 import os
+import threading
 import time
+import webbrowser
 
 import cv2
 from flask import Flask, Response, jsonify, render_template, send_file
+
+from resource_path import resource_path
 
 # ─────────────────────────────────────────────────────────────────────────────
 # [알고리즘 교체 지점] 아래 import 한 줄만 바꾸면 드론 제어 알고리즘이 통째로 교체된다.
@@ -15,7 +19,12 @@ from flask import Flask, Response, jsonify, render_template, send_file
 # ─────────────────────────────────────────────────────────────────────────────
 from drone_flight_test import DroneController
 
-app = Flask(__name__)
+# exe(onefile)로 실행될 때도 templates 폴더를 찾도록 절대경로를 지정한다.
+app = Flask(__name__, template_folder=resource_path("templates"))
+
+# 웹 서버 주소 (실행 시 브라우저를 여기로 자동으로 연다)
+HOST = "0.0.0.0"
+PORT = 5000
 
 # 드론 제어 + AI 분석 컨트롤러 (백그라운드 스레드에서 동작)
 controller = DroneController()
@@ -87,9 +96,16 @@ def api_download():
                      download_name=os.path.basename(path))
 
 
+def open_browser():
+    """서버가 뜬 뒤 기본 브라우저로 화면을 자동으로 연다."""
+    webbrowser.open(f"http://127.0.0.1:{PORT}/")
+
+
 if __name__ == "__main__":
     # 드론 연결 + 스트림 + 분석 루프 시작
     controller.start()
+    # 서버가 완전히 뜰 시간을 잠깐 준 뒤 브라우저를 자동으로 연다.
+    threading.Timer(1.5, open_browser).start()
     # threaded=True: 영상 스트리밍과 API 요청을 동시에 처리
     # use_reloader=False: 리로더가 프로세스를 두 번 띄워 드론에 중복 연결되는 것을 방지
-    app.run(host="0.0.0.0", port=5000, threaded=True, use_reloader=False)
+    app.run(host=HOST, port=PORT, threaded=True, use_reloader=False)

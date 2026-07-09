@@ -8,6 +8,7 @@ import threading
 import queue
 import os
 from datetime import datetime
+from resource_path import model_path, app_dir
 
 # --- 상수 설정 ---
 BALL_CLASS_ID = 32
@@ -23,7 +24,7 @@ Kp_angle = 0.8  # 호모그래피 각도 오차 기반 (단위: degree)
 Kp_pixel = 60.0  # 화면상 픽셀 오차 기반 (단위: ratio -1.0~1.0)
 
 # --- 녹화 설정 ---
-RECORDINGS_DIR = "recordings"  # mp4 저장 폴더
+RECORDINGS_DIR = os.path.join(app_dir(), "recordings")  # mp4 저장 폴더 (exe 옆)
 OUTPUT_FPS = 20  # 저장 mp4의 재생 프레임레이트 (실측 루프 속도에 맞춰 조정 가능)
 
 # 가상 농구장 실제 좌표 매핑
@@ -223,9 +224,9 @@ class DroneController:
 
     # --- 메인 루프 (백그라운드 스레드에서 실행) ---
     def _run(self):
-        model_person = YOLO("yolo11n.pt")
-        model_ball = YOLO("best.pt")
-        model_points = YOLO("yolov8n-pose-test4.pt")
+        model_person = YOLO(model_path("yolo11n.pt"))
+        model_ball = YOLO(model_path("best.pt"))
+        model_points = YOLO(model_path("yolov8n-pose-test4.pt"))
 
         tello = Tello()
         tello.connect()

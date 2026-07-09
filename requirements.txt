@@ -3,3 +3,4 @@ djitellopy
 ultralytics
 opencv-python
 numpy
+pyinstaller
