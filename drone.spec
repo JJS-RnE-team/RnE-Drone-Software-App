@@ -1,18 +1,30 @@
 # -*- mode: python ; coding: utf-8 -*-
 #
-# PyInstaller 빌드 설정 파일 (macOS / 맥북 전용).
+# PyInstaller 빌드 설정 파일 (macOS / 맥북 전용, onedir 방식).
 # 맥북 터미널에서 다음 한 줄로 앱을 만든다:
 #
 #     pyinstaller drone.spec
 #
-# 결과물: dist/DroneApp.app  (맥용 앱 하나. 더블클릭하면 브라우저가 열린다.)
-#         dist/DroneApp       (터미널에서 실행하면 로그가 보이는 실행 파일. .app 안에도 같이 들어간다.)
-# 소스 파일(.py, *.pt, templates/)은 지워지지 않는다. 빌드 결과만 build/, dist/ 에 새로 생긴다.
+# 결과물: dist/DroneApp.app  (맥용 앱. 더블클릭하면 브라우저가 열린다.)
 #
+# ★ onedir(폴더) 방식이란?
+#   예전에는 onefile(파일 하나)로 구웠는데, 그러면 실행할 때마다 앱 안의 수백 MB
+#   (torch, ultralytics 등)를 임시폴더에 "압축 해제"하느라 시작이 몇 분씩 걸렸다.
+#   onedir 는 그 내용물을 .app 안에 "미리 풀린 상태"로 넣어두므로, 실행할 때 압축을
+#   풀 필요가 없어 시작이 훨씬 빠르다. (맥에선 .app 이 원래 폴더라 사용자 눈엔 여전히
+#   아이콘 하나로 보인다 → 배포·사용에 불편 없음.)
+#
+# 소스 파일(.py, *.pt, templates/)은 지워지지 않는다. 빌드 결과만 build/, dist/ 에 새로 생긴다.
 # ※ 윈도우 exe는 윈도우에서만, 맥 .app 은 맥에서만 구울 수 있다. 이 파일은 "맥에서" 굽는 용도.
 
 import glob
+import os
 from PyInstaller.utils.hooks import collect_all
+
+# --- 앱 아이콘 -----------------------------------------------------------------
+# 레포 루트에 icon.icns 파일이 있으면 그것을 앱 아이콘으로 쓰고,
+# 없으면 None(기본 아이콘)으로 둔다. → 아이콘 파일이 없어도 빌드는 정상 진행된다.
+ICON_FILE = "icon.icns" if os.path.exists("icon.icns") else None
 
 # --- 앱 안에 함께 넣을 파일들 -------------------------------------------------
 # 프로젝트 루트의 모든 .pt 모델을 앱 안 루트에 그대로 넣는다.
@@ -51,19 +63,18 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
+# onedir 방식: EXE 에는 실행 파일 알맹이만 넣고(exclude_binaries=True),
+# 나머지 라이브러리·데이터(a.binaries, a.datas)는 아래 COLLECT 가 폴더로 모은다.
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,    # onedir 의 핵심: 라이브러리를 exe 안에 넣지 않고 폴더에 둔다.
     name="DroneApp",          # 실행 파일명 → DroneApp (맥에는 .exe 확장자가 없다)
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,                # 맥에서는 UPX 압축이 실행 파일/서명을 깨뜨리는 경우가 많아 끈다.
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=True,             # 터미널에서 실행하면 로그(배터리, 오류 등)가 보인다.
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -76,13 +87,23 @@ exe = EXE(
     entitlements_file=None,
 )
 
-# --- 맥용 .app 번들로 감싸기 ---------------------------------------------------
-# 위 EXE 는 터미널에서 돌리는 실행 파일이고, 아래 BUNDLE 이 이를 더블클릭 가능한
-# DroneApp.app 으로 포장한다. (윈도우의 DroneApp.exe 에 해당하는 것)
-app = BUNDLE(
+# 실행 파일 + 라이브러리 + 데이터(.pt, templates)를 하나의 폴더로 모은다.
+coll = COLLECT(
     exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name="DroneApp",
+)
+
+# --- 맥용 .app 번들로 감싸기 ---------------------------------------------------
+# 위 COLLECT 결과(폴더)를 더블클릭 가능한 DroneApp.app 으로 포장한다.
+app = BUNDLE(
+    coll,
     name="DroneApp.app",
-    icon=None,                        # 아이콘(.icns)이 있으면 여기에 경로를 넣는다.
+    icon=ICON_FILE,                   # icon.icns 가 있으면 그것을, 없으면 기본 아이콘.
     bundle_identifier="com.rne.droneapp",
     info_plist={
         "CFBundleName": "DroneApp",

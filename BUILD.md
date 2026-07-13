@@ -69,14 +69,29 @@ pip install -r requirements.txt  # 필요한 라이브러리를 전부 설치
 4. 끄려면 터미널에서 `Control + C`.
    > 여기서 문제가 나면 앱으로 넘어가지 말고, 화면에 뜬 오류 메시지를 나한테 그대로 보내줘.
 
+## (선택) 앱 아이콘 넣기
+기본 아이콘 대신 원하는 아이콘을 쓰고 싶으면, **`icon.icns`** 파일을 프로젝트 폴더 맨 위(=`app.py` 와 같은 위치)에 두면 된다.
+`drone.spec` 이 이 파일이 있으면 자동으로 앱 아이콘으로 쓰고, 없으면 기본 아이콘으로 굽는다(없어도 빌드는 정상 진행).
+- 이미 `.icns` 파일이 있으면 그대로 `icon.icns` 로 이름 바꿔 넣으면 끝.
+- png 그림밖에 없으면 맥 터미널에서 아래로 `.icns` 를 만들 수 있다(`myicon.png` 는 정사각형 권장):
+  ```
+  mkdir icon.iconset
+  sips -z 512 512 myicon.png --out icon.iconset/icon_512x512.png
+  sips -z 256 256 myicon.png --out icon.iconset/icon_256x256.png
+  sips -z 128 128 myicon.png --out icon.iconset/icon_128x128.png
+  iconutil -c icns icon.iconset -o icon.icns
+  ```
+
 ## 5단계 — 앱 만들기 (패키징)
 터미널에 아래 한 줄을 입력하고 엔터(`(.venv)` 가 켜져 있어야 함):
 ```
 pyinstaller drone.spec
 ```
-- 몇 분 걸린다. 끝나면 폴더에 `build/` 와 `dist/` 가 새로 생긴다.
+- 굽는 데는 몇 분 걸린다. 끝나면 폴더에 `build/` 와 `dist/` 가 새로 생긴다.
 - **원래 파일(.py, .pt, templates)은 그대로 남아 있다.** 앱만 옆에 새로 생기는 것.
 - 완성된 실행 앱: **`dist/DroneApp.app`**
+- 이 앱은 **onedir(폴더) 방식**이라, 예전 onefile 방식보다 **실행(더블클릭 후 켜지는) 속도가 훨씬 빠르다.**
+  (내용물이 .app 안에 미리 풀려 있어 실행할 때 압축을 안 풀기 때문.)
 
 ## 6단계 — 앱 실행해보기
 1. 드론 켜고 맥북을 드론 wifi에 연결.
