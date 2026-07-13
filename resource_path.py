@@ -25,11 +25,20 @@ def resource_path(relative_path):
 def app_dir():
     """실행 중에 새로 만드는 파일(녹화 mp4 등)을 저장할 기준 폴더.
 
-    - exe로 실행 중이면: exe 파일이 있는 폴더 (임시 폴더는 종료 시 삭제되므로 여기 쓰면 안 됨).
+    - 맥 .app 으로 실행 중이면: DroneApp.app 이 놓여 있는 폴더(사용자가 보는 위치).
+      실행 파일 자체는 DroneApp.app/Contents/MacOS/ 안에 있는데, 번들 내부에 녹화를
+      저장하면 사용자 눈에 보이지 않으므로 .app 이 있는 바깥 폴더에 저장한다.
+    - 그 밖의 방식(터미널 실행 파일 등)으로 frozen 상태면: 실행 파일이 있는 폴더.
     - 그냥 python으로 실행 중이면: 현재 작업 폴더.
     """
     if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
+        exe_dir = os.path.dirname(sys.executable)
+        # 맥 .app 번들이면 실행 파일 경로가 .../DroneApp.app/Contents/MacOS/DroneApp 이다.
+        macos_marker = os.path.join("Contents", "MacOS")
+        if exe_dir.endswith(macos_marker):
+            # .../DroneApp.app/Contents/MacOS → .../  (DroneApp.app 이 있는 폴더)
+            return os.path.dirname(os.path.dirname(os.path.dirname(exe_dir)))
+        return exe_dir
     return os.path.abspath(".")
 
 

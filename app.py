@@ -23,8 +23,10 @@ from drone_flight_test import DroneController
 app = Flask(__name__, template_folder=resource_path("templates"))
 
 # 웹 서버 주소 (실행 시 브라우저를 여기로 자동으로 연다)
+# macOS 는 5000번 포트를 시스템의 AirPlay 수신(AirPlay Receiver)이 이미 쓰고 있어
+# 충돌이 나므로 5001번을 쓴다. (윈도우에서는 5000번을 썼음)
 HOST = "0.0.0.0"
-PORT = 5000
+PORT = 5001
 
 # 드론 제어 + AI 분석 컨트롤러 (백그라운드 스레드에서 동작)
 controller = DroneController()

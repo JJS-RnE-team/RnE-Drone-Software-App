@@ -2,7 +2,15 @@ __pycache__/
 *.pyc
 recordings/
 
-# PyInstaller 빌드 결과물 (각자 윈도우에서 빌드하므로 git에는 올리지 않는다)
+# PyInstaller 빌드 결과물 (각자 맥에서 빌드하므로 git에는 올리지 않는다)
 build/
 dist/
 *.exe
+*.app/
+
+# 파이썬 가상환경 (맥에서 python3 -m venv 로 만드는 폴더)
+.venv/
+venv/
+
+# macOS 가 폴더마다 자동으로 만드는 숨김 파일
+.DS_Store
