@@ -1,3 +1,4 @@
+import logging
 import os
 import threading
 import time
@@ -6,7 +7,33 @@ import webbrowser
 import cv2
 from flask import Flask, Response, jsonify, render_template, send_file
 
-from resource_path import resource_path
+from resource_path import resource_path, app_dir
+
+
+def _setup_logging():
+    """시작 과정을 콘솔 + 파일에 모두 남긴다 (진단용).
+
+    .app 을 더블클릭하면 콘솔(터미널)이 안 보이므로, 앱 옆(app_dir)에 'droneapp_log.txt'
+    파일을 만들어 거기에도 같은 로그를 남긴다. 문제가 나면 이 파일만 열어보면 어느 단계에서
+    멈췄는지 알 수 있다.
+    """
+    log_path = os.path.join(app_dir(), "droneapp_log.txt")
+    handlers = [logging.StreamHandler()]  # 콘솔(터미널 실행 시 보임)
+    try:
+        handlers.append(logging.FileHandler(log_path, mode="w", encoding="utf-8"))
+    except Exception:
+        pass  # 파일을 못 만들어도(권한 등) 콘솔 로그는 남긴다.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=handlers,
+    )
+    return log_path
+
+
+LOG_PATH = _setup_logging()
+log = logging.getLogger(__name__)
+log.info("로그 파일 위치: %s", LOG_PATH)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # [알고리즘 교체 지점] 아래 import 한 줄만 바꾸면 드론 제어 알고리즘이 통째로 교체된다.
@@ -100,14 +127,18 @@ def api_download():
 
 def open_browser():
     """서버가 뜬 뒤 기본 브라우저로 화면을 자동으로 연다."""
-    webbrowser.open(f"http://127.0.0.1:{PORT}/")
+    url = f"http://127.0.0.1:{PORT}/"
+    log.info("브라우저 자동 열기: %s", url)
+    webbrowser.open(url)
 
 
 if __name__ == "__main__":
-    # 드론 연결 + 스트림 + 분석 루프 시작
+    # 드론 연결 + 스트림 + 분석 루프 시작 (백그라운드 스레드에서 동작)
+    log.info("controller.start() 호출 — 드론/모델 백그라운드 스레드 시작")
     controller.start()
     # 서버가 완전히 뜰 시간을 잠깐 준 뒤 브라우저를 자동으로 연다.
     threading.Timer(1.5, open_browser).start()
     # threaded=True: 영상 스트리밍과 API 요청을 동시에 처리
     # use_reloader=False: 리로더가 프로세스를 두 번 띄워 드론에 중복 연결되는 것을 방지
+    log.info("Flask 서버 시작: bind=%s:%s (서버는 여기서 blocking으로 계속 돌아감)", HOST, PORT)
     app.run(host=HOST, port=PORT, threaded=True, use_reloader=False)

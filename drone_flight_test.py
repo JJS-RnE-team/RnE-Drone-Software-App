@@ -6,8 +6,11 @@ import numpy as np
 import threading
 import queue
 import os
+import logging
 from datetime import datetime
 from resource_path import model_path, app_dir
+
+log = logging.getLogger(__name__)
 
 # =============================================================================
 # [테스트용 알고리즘] 사람(person) 인식 → 화면 중심 대비 좌우 오차 비례(P) 제어로 yaw 회전.
@@ -145,19 +148,39 @@ class DroneController:
 
     # --- 메인 루프 (백그라운드 스레드에서 실행) ---
     def _run(self):
-        # 디텍션 모델. models/ 에 yolov8n.pt 가 있으면 그걸 쓰고, 없으면 ultralytics가 자동 다운로드한다.
-        model = YOLO(model_path("yolov8n.pt"))
+        # --- 시작 단계 (진단 로그 포함) ----------------------------------------
+        # 지금까지는 이 구간에서 예외가 나면(모델 로딩 실패·드론 연결 실패 등) 데몬 스레드가
+        # '조용히' 죽어버려서, .app 에서는 원인이 전혀 안 보였다(UI만 뜨고 영상/연결 안 됨).
+        # 그래서 각 단계에 로그를 남기고, 예외를 잡아 전체 traceback을 기록한 뒤 종료한다.
+        try:
+            # 디텍션 모델. 요청한 이름의 .pt 가 번들/폴더에 있으면 그것을 쓰고,
+            # 없으면 ultralytics가 '인터넷에서 자동 다운로드'를 시도한다.
+            # → 드론(TELLO) wifi 는 인터넷이 없으므로, 파일이 번들에 없으면 여기서 멈추거나 실패한다.
+            requested = "yolov8n.pt"
+            resolved = model_path(requested)
+            log.info("① YOLO 모델 로딩 시작: 요청=%s → 실제경로=%s "
+                     "(경로가 요청이름 그대로면 = 번들에 없어서 인터넷 다운로드 시도 중이라는 뜻)",
+                     requested, resolved)
+            model = YOLO(resolved)
+            log.info("① YOLO 모델 로딩 완료")
 
-        tello = Tello()
-        tello.connect()
-        battery = tello.get_battery()
-        print("배터리:", battery)
-        with self._status_lock:
-            self._connected = True
-            self._battery = battery
+            tello = Tello()
+            log.info("② tello.connect() 시작 — 로컬 네트워크(UDP)로 드론에 연결 시도")
+            tello.connect()
+            battery = tello.get_battery()
+            log.info("② 드론 연결 완료 · 배터리=%s%%", battery)
+            with self._status_lock:
+                self._connected = True
+                self._battery = battery
 
-        tello.streamon()
-        frame_read = tello.get_frame_read()
+            log.info("③ tello.streamon() — 영상 스트림 시작")
+            tello.streamon()
+            frame_read = tello.get_frame_read()
+            log.info("③ 스트림 시작 완료 — 프레임 수신/분석 루프 진입")
+        except Exception:
+            log.exception("‼️ 시작 단계에서 예외 발생 — 백그라운드 스레드를 종료한다. "
+                          "이것이 'UI는 뜨지만 영상 안 나오고 드론 연결 안 됨'의 직접 원인이다.")
+            return
 
         # 사람 중심 정보 (프레임 간 유지)
         last_person_center_ratio = None
