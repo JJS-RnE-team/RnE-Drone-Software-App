@@ -175,8 +175,10 @@ class DroneController:
 
             log.info("③ tello.streamon() — 영상 스트림 시작")
             tello.streamon()
+            log.info("③ get_frame_read() 호출 — 영상 디코더(PyAV/ffmpeg)로 스트림 여는 중 "
+                     "(여기서 오래 멈추면: av가 번들에 없거나, 영상 UDP(11111)가 안 들어오는 것)")
             frame_read = tello.get_frame_read()
-            log.info("③ 스트림 시작 완료 — 프레임 수신/분석 루프 진입")
+            log.info("③ 스트림 준비 완료 — 프레임 수신/분석 루프 진입")
         except Exception:
             log.exception("‼️ 시작 단계에서 예외 발생 — 백그라운드 스레드를 종료한다. "
                           "이것이 'UI는 뜨지만 영상 안 나오고 드론 연결 안 됨'의 직접 원인이다.")

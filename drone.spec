@@ -39,9 +39,17 @@ binaries = []
 hiddenimports = []
 
 # ultralytics(YOLO), djitellopy 는 부속 데이터 파일·숨은 import 가 많아 통째로 수집한다.
+# av(PyAV): djitellopy 가 드론 영상 스트림(UDP)을 여는 데 쓰는 백엔드로, 내부에 ffmpeg
+#   라이브러리를 품고 있다. 이걸 번들에 안 넣으면 .app 에서 get_frame_read() 가 조용히
+#   멈춰(영상 안 나오고 무한 로딩) 버린다. 그래서 반드시 함께 수집한다.
 # 패키징 오류(모듈/파일 누락)가 나면 대개 이 목록에 패키지를 추가해 해결한다.
-for pkg in ("ultralytics", "djitellopy"):
-    pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
+for pkg in ("ultralytics", "djitellopy", "av"):
+    try:
+        pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
+    except Exception as e:
+        # 설치 안 된 선택적 패키지면 건너뛴다(빌드를 멈추지 않게).
+        print("[drone.spec] collect_all('%s') 건너뜀: %s" % (pkg, e))
+        continue
     datas += pkg_datas
     binaries += pkg_binaries
     hiddenimports += pkg_hidden
