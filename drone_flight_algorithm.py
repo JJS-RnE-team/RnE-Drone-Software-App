@@ -7,8 +7,11 @@ import math
 import threading
 import queue
 import os
+import logging
 from datetime import datetime
 from resource_path import model_path, app_dir
+
+log = logging.getLogger(__name__)
 
 # --- 상수 설정 ---
 BALL_CLASS_ID = 32
@@ -224,20 +227,46 @@ class DroneController:
 
     # --- 메인 루프 (백그라운드 스레드에서 실행) ---
     def _run(self):
-        model_person = YOLO(model_path("yolo11n.pt"))
-        model_ball = YOLO(model_path("best.pt"))
-        model_points = YOLO(model_path("yolov8n-pose-test4.pt"))
+        # --- 시작 단계 (진단 로그 포함) ----------------------------------------
+        # drone_flight_test.py 와 '동일한' 시작 처리(로그·예외 처리)를 유지한다.
+        # (회전 제어 알고리즘 자체는 두 파일이 다르지만, 시작·패키징 관련 부분은 항상 맞춘다.)
+        # 이 구간에서 예외가 나면 지금까지는 데몬 스레드가 조용히 죽어 .app 에서 원인이
+        # 안 보였다(UI만 뜨고 영상/연결 안 됨). 그래서 각 단계에 로그를 남기고,
+        # 예외를 잡아 전체 traceback을 기록한 뒤 종료한다.
+        try:
+            # 디텍션 모델 3종. 요청한 이름의 .pt 가 번들/폴더에 있으면 그것을 쓰고,
+            # 없으면 ultralytics가 '인터넷에서 자동 다운로드'를 시도한다.
+            # → 드론(TELLO) wifi 는 인터넷이 없으므로, 파일이 번들에 없으면 여기서 멈추거나 실패한다.
+            #   (특히 yolo11n.pt 는 레포에 없으면 반드시 번들에 포함시켜야 한다.)
+            for name in ("yolo11n.pt", "best.pt", "yolov8n-pose-test4.pt"):
+                resolved = model_path(name)
+                log.info("① YOLO 모델 로딩: 요청=%s → 실제경로=%s "
+                         "(경로가 요청이름 그대로면 = 번들에 없어서 인터넷 다운로드 시도 중이라는 뜻)",
+                         name, resolved)
+            model_person = YOLO(model_path("yolo11n.pt"))
+            model_ball = YOLO(model_path("best.pt"))
+            model_points = YOLO(model_path("yolov8n-pose-test4.pt"))
+            log.info("① YOLO 모델 3종 로딩 완료")
 
-        tello = Tello()
-        tello.connect()
-        battery = tello.get_battery()
-        print("배터리:", battery)
-        with self._status_lock:
-            self._connected = True
-            self._battery = battery
+            tello = Tello()
+            log.info("② tello.connect() 시작 — 로컬 네트워크(UDP)로 드론에 연결 시도")
+            tello.connect()
+            battery = tello.get_battery()
+            log.info("② 드론 연결 완료 · 배터리=%s%%", battery)
+            with self._status_lock:
+                self._connected = True
+                self._battery = battery
 
-        tello.streamon()
-        frame_read = tello.get_frame_read()
+            log.info("③ tello.streamon() — 영상 스트림 시작")
+            tello.streamon()
+            log.info("③ get_frame_read() 호출 — 영상 디코더(PyAV/ffmpeg)로 스트림 여는 중 "
+                     "(여기서 오래 멈추면: av가 번들에 없거나, 영상 UDP(11111)가 안 들어오는 것)")
+            frame_read = tello.get_frame_read()
+            log.info("③ 스트림 준비 완료 — 프레임 수신/분석 루프 진입")
+        except Exception:
+            log.exception("‼️ 시작 단계에서 예외 발생 — 백그라운드 스레드를 종료한다. "
+                          "이것이 'UI는 뜨지만 영상 안 나오고 드론 연결 안 됨'의 직접 원인이다.")
+            return
 
         holder_track_id, last_holder_box_small, last_holder_update_t = None, None, 0.0
         yaw_speed_history = self.yaw_speed_history
